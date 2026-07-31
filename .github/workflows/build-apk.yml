@@ -33,6 +33,21 @@ jobs:
       - name: Build Web Application
         run: npx vite build --base=/
 
+      - name: Fix Multi-Page Asset Duplication for Capacitor
+        run: |
+          python3 - << 'EOF'
+          import os, shutil
+
+          dist_dir = 'dist'
+          assets_dir = os.path.join(dist_dir, 'assets')
+
+          # Copy root assets folder into send/ and receive/ so relative scripts resolve
+          for subfolder in ['send', 'receive']:
+              target_assets = os.path.join(dist_dir, subfolder, 'assets')
+              if os.path.exists(assets_dir) and not os.path.exists(target_assets):
+                  shutil.copytree(assets_dir, target_assets)
+          EOF
+
       - name: Initialize Capacitor
         run: npx cap init "Decimen Optical" "com.decimen.optical" --web-dir "dist"
 
@@ -42,17 +57,23 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Inject Camera Permissions
+      - name: Inject Camera Permissions & WebView Security Settings
         run: |
           python3 - << 'EOF'
           path = 'android/app/src/main/AndroidManifest.xml'
           with open(path, 'r') as f:
               content = f.read()
+          
+          # Add Camera and Hardware features
           if 'android.permission.CAMERA' not in content:
               perms = '<uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="true" />\n    <application'
               content = content.replace('<application', perms)
-              with open(path, 'w') as f:
-                  f.write(content)
+          
+          # Ensure Mix Content / DOM Storage is permitted
+          content = content.replace('<application', '<application android:usesCleartextTraffic="true"')
+          
+          with open(path, 'w') as f:
+              f.write(content)
           EOF
 
       - name: Fix Duplicate Kotlin Stdlib Dependencies
