@@ -24,40 +24,45 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Install Node Dependencies
+      - name: Install Project Dependencies
         run: npm install
 
-      - name: Install Capacitor Dependencies
-        run: |
-          npm install @capacitor/core
-          npm install -D @capacitor/cli @capacitor/android
-
-      - name: Configure Relative Base Path in Vite
-        run: |
-          node -e "
-            const fs = require('fs');
-            let content = fs.readFileSync('vite.config.ts', 'utf8');
-            if (!content.includes('base:')) {
-              content = content.replace('defineConfig({', 'defineConfig({\n  base: \"./\",');
-              fs.writeFileSync('vite.config.ts', content);
-            }
-          "
+      - name: Install Capacitor
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Web Application
-        run: npm run build
+        run: npx vite build --base=./
 
-      - name: Initialize & Sync Capacitor Android
-        run: |
-          npx cap init "Decimen Optical" "com.decimen.optical" --web-dir "dist" || true
-          npx cap add android || true
-          npx cap sync android
+      - name: Initialize Capacitor
+        run: npx cap init "Decimen Optical" "com.decimen.optical" --web-dir "dist"
 
-      - name: Add Camera Permission to Android Manifest
+      - name: Add Android Platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Inject Camera Permissions
         run: |
-          node -e "
-            const fs = require('fs');
-            const manifestPath = 'android/app/src/main/AndroidManifest.xml';
-            if (fs.existsSync(manifestPath)) {
-              let manifest = fs.readFileSync(manifestPath, 'utf8');
-              if (!manifest.includes('android.permission.CAMERA')) {
-                manifest = manifest.replace('\n    \n
+          python3 - << 'EOF'
+          path = 'android/app/src/main/AndroidManifest.xml'
+          with open(path, 'r') as f:
+              content = f.read()
+          if 'android.permission.CAMERA' not in content:
+              perms = '<uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="true" />\n    <application'
+              content = content.replace('<application', perms)
+              with open(path, 'w') as f:
+                  f.write(content)
+          EOF
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Decimen-Optical-Transfer-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
