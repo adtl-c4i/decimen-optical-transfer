@@ -30,8 +30,20 @@ jobs:
       - name: Install Capacitor
         run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
+      - name: Configure Vite for Relative Paths
+        run: |
+          python3 - << 'EOF'
+          path = 'vite.config.ts'
+          with open(path, 'r') as f:
+              content = f.read()
+          if 'base:' not in content:
+              content = content.replace('defineConfig({', 'defineConfig({\n  base: "./",')
+              with open(path, 'w') as f:
+                  f.write(content)
+          EOF
+
       - name: Build Web Application
-        run: npx vite build --base=./
+        run: npx vite build
 
       - name: Initialize Capacitor
         run: npx cap init "Decimen Optical" "com.decimen.optical" --web-dir "dist"
@@ -42,7 +54,7 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Inject Camera Permissions
+      - name: Inject Camera Permissions and Cleartext Support
         run: |
           python3 - << 'EOF'
           path = 'android/app/src/main/AndroidManifest.xml'
